@@ -28,7 +28,7 @@ training:
   save_freq: 25000
   save_checkpoint: true
 
-  batch_size: 64
+  batch_size: 32 # MODIFIED FROM 64 ORIG
   grad_clip_norm: 10
   lr: 1.0e-4
   lr_scheduler: cosine

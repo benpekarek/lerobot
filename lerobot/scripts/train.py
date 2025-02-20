@@ -243,6 +243,8 @@ def train(cfg: DictConfig, out_dir: str | None = None, job_name: str | None = No
     init_logging()
     logging.info(pformat(OmegaConf.to_container(cfg)))
 
+    print(f"Cfg at start of train: {cfg.override_dataset_stats.keys()}")
+
     if cfg.training.online_steps > 0 and isinstance(cfg.dataset_repo_id, ListConfig):
         raise NotImplementedError("Online training with LeRobotMultiDataset is not implemented.")
 
@@ -309,6 +311,17 @@ def train(cfg: DictConfig, out_dir: str | None = None, job_name: str | None = No
     torch.backends.cudnn.benchmark = True
     torch.backends.cuda.matmul.allow_tf32 = True
 
+    for keys in [
+        ("training", "delta_timestamps"),
+        ("policy", "input_shapes"),
+        ("policy", "input_normalization_modes"),
+    ]:
+        dct = dict(cfg[keys[0]][keys[1]])
+        dct["observation.images.top"] = dct["observation.image"]
+        del dct["observation.image"]
+        cfg[keys[0]][keys[1]] = dct
+    cfg.override_dataset_stats = None
+
     logging.info("make_dataset")
     offline_dataset = make_dataset(cfg)
     if isinstance(offline_dataset, MultiLeRobotDataset):
@@ -326,6 +339,12 @@ def train(cfg: DictConfig, out_dir: str | None = None, job_name: str | None = No
         eval_env = make_env(cfg)
 
     logging.info("make_policy")
+    print(f"Cfg before make policy: {cfg}")
+    
+
+    # cfg.override_dataset_stats["observation.images.top"] = cfg.override_dataset_stats["observation.image"]
+    # # TODO: delete
+
     policy = make_policy(
         hydra_cfg=cfg,
         dataset_stats=offline_dataset.meta.stats if not cfg.resume else None,
@@ -336,6 +355,7 @@ def train(cfg: DictConfig, out_dir: str | None = None, job_name: str | None = No
     # Temporary hack to move optimizer out of policy
     optimizer, lr_scheduler = make_optimizer_and_scheduler(cfg, policy)
     grad_scaler = GradScaler(enabled=cfg.use_amp)
+    print(f"Cfg after policy: {cfg}")
 
     step = 0  # number of policy updates (forward + backward + optim)
 
